@@ -47,6 +47,20 @@ class CheckpointTracker {
 	private gitOperations: GitOperations
 
 	/**
+<<<<<<< Updated upstream
+=======
+	 * Helper method to clean commit hashes by removing any "HEAD " prefix.
+	 * This ensures compatibility with historical commits that may have the prefix stored.
+	 */
+	private cleanCommitHash(hash: string): string {
+		if (!hash) {
+			return ""
+		}
+		return hash.startsWith("HEAD ") ? hash.substring(5) : hash
+	}
+
+	/**
+>>>>>>> Stashed changes
 	 * Creates a new CheckpointTracker instance to manage checkpoints for a specific task.
 	 * The constructor is private - use the static create() method to instantiate.
 	 *
