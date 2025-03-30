@@ -47,6 +47,15 @@ class CheckpointTracker {
 	private gitOperations: GitOperations
 
 	/**
+	 * Helper method to clean commit hashes by removing any "HEAD " prefix.
+	 * This ensures compatibility with historical commits that may have the prefix stored.
+	 */
+	private cleanCommitHash(hash: string): string {
+		if (!hash) return ""
+		return hash.startsWith("HEAD ") ? hash.substring(5) : hash
+	}
+
+	/**
 	 * Creates a new CheckpointTracker instance to manage checkpoints for a specific task.
 	 * The constructor is private - use the static create() method to instantiate.
 	 *
@@ -236,14 +245,15 @@ class CheckpointTracker {
 	 * - Reset to target commit
 	 */
 	public async resetHead(commitHash: string): Promise<void> {
-		console.info(`Resetting to checkpoint: ${commitHash}`)
+		const cleanHash = this.cleanCommitHash(commitHash)
+		console.info(`Resetting to checkpoint: ${cleanHash}`)
 		const startTime = performance.now()
 
 		const gitPath = await getShadowGitPath(this.globalStoragePath, this.taskId, this.cwdHash)
 		const git = simpleGit(path.dirname(gitPath))
 		console.debug(`Using shadow git at: ${gitPath}`)
-		await git.reset(["--hard", commitHash]) // Hard reset to target commit
-		console.debug(`Successfully reset to checkpoint: ${commitHash}`)
+		await git.reset(["--hard", cleanHash]) // Hard reset to target commit
+		console.debug(`Successfully reset to checkpoint: ${cleanHash}`)
 
 		const durationMs = Math.round(performance.now() - startTime)
 		telemetryService.captureCheckpointUsage(this.taskId, "restored", durationMs)
@@ -278,12 +288,15 @@ class CheckpointTracker {
 		const gitPath = await getShadowGitPath(this.globalStoragePath, this.taskId, this.cwdHash)
 		const git = simpleGit(path.dirname(gitPath))
 
-		console.info(`Getting diff between commits: ${lhsHash || "initial"} -> ${rhsHash || "working directory"}`)
+		const cleanLhsHash = this.cleanCommitHash(lhsHash)
+		const cleanRhsHash = rhsHash ? this.cleanCommitHash(rhsHash) : undefined
+
+		console.info(`Getting diff between commits: ${cleanLhsHash || "initial"} -> ${cleanRhsHash || "working directory"}`)
 
 		// Stage all changes so that untracked files appear in diff summary
 		await this.gitOperations.addCheckpointFiles(git)
 
-		const diffRange = rhsHash ? `${lhsHash}..${rhsHash}` : lhsHash
+		const diffRange = cleanRhsHash ? `${cleanLhsHash}..${cleanRhsHash}` : cleanLhsHash
 		console.info(`Diff range: ${diffRange}`)
 		const diffSummary = await git.diffSummary([diffRange])
 
@@ -294,15 +307,15 @@ class CheckpointTracker {
 
 			let beforeContent = ""
 			try {
-				beforeContent = await git.show([`${lhsHash}:${filePath}`])
+				beforeContent = await git.show([`${cleanLhsHash}:${filePath}`])
 			} catch (_) {
 				// file didn't exist in older commit => remains empty
 			}
 
 			let afterContent = ""
-			if (rhsHash) {
+			if (cleanRhsHash) {
 				try {
-					afterContent = await git.show([`${rhsHash}:${filePath}`])
+					afterContent = await git.show([`${cleanRhsHash}:${filePath}`])
 				} catch (_) {
 					// file didn't exist in newer commit => remains empty
 				}
@@ -342,12 +355,15 @@ class CheckpointTracker {
 		const gitPath = await getShadowGitPath(this.globalStoragePath, this.taskId, this.cwdHash)
 		const git = simpleGit(path.dirname(gitPath))
 
-		console.info(`Getting diff count between commits: ${lhsHash || "initial"} -> ${rhsHash || "working directory"}`)
+		const cleanLhsHash = this.cleanCommitHash(lhsHash)
+		const cleanRhsHash = rhsHash ? this.cleanCommitHash(rhsHash) : undefined
+
+		console.info(`Getting diff count between commits: ${cleanLhsHash || "initial"} -> ${cleanRhsHash || "working directory"}`)
 
 		// Stage all changes so that untracked files appear in diff summary
 		await this.gitOperations.addCheckpointFiles(git)
 
-		const diffRange = rhsHash ? `${lhsHash}..${rhsHash}` : lhsHash
+		const diffRange = cleanRhsHash ? `${cleanLhsHash}..${cleanRhsHash}` : cleanLhsHash
 		const diffSummary = await git.diffSummary([diffRange])
 
 		const durationMs = Math.round(performance.now() - startTime)
